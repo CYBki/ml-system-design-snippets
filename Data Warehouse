@@ -1,0 +1,139 @@
+# Data Warehouse - ML System Design Note
+
+An enterprise store for structured and semi-structured data from many sources, designed for analytics, reporting, and business intelligence. It preserves historical context, favors columnar querying, and separates compute vs storage for scale and cost control.
+![Data Warehouse Architecture](assets/data-warehouse.png)
+
+## When to use
+
+- Many disparate sources; need a single source of truth
+- Ad-hoc SQL, dashboards, governed data access  
+- Historical trend analysis, KPI tracking, and decision support
+- You want strong SLAs for freshness, cost, and security
+
+## Architecture overview
+
+**Sources → Ingestion → Staging → Transform → Data Warehouse → Visualization**
+
+Data flows from various sources through ingestion pipelines (batch or streaming), gets staged, transformed via ETL/ELT processes, stored in a structured warehouse with facts and dimensions, then consumed by BI tools.
+
+## Core design decisions
+
+### ETL vs ELT
+- **ELT**: Load first, transform in-warehouse. More flexible and scalable
+- **ETL**: Transform before loading. Better for strict pipelines and governance
+
+### Data modeling
+- **Star schema**: Denormalized, faster for BI queries
+- **Snowflake schema**: Normalized, saves storage but more complex joins
+- **Slowly Changing Dimensions**: Track history with SCD Type-1 (overwrite) or Type-2 (versioning)
+
+### Data freshness
+- **Batch processing**: Hourly or daily updates, simpler to manage
+- **Stream processing**: Near real-time, handles late arrivals and duplicates
+- Plan for watermarks and out-of-order data
+
+### Performance optimization
+- **Partitioning**: By event_date or load_date for time-based queries
+- **Clustering**: By high-cardinality columns like customer_id, country
+- **Storage format**: Columnar formats (Parquet, ORC) with compression
+- **Materialized views**: Pre-compute heavy aggregations
+
+## Data quality and governance
+
+### Testing and contracts
+- Define data contracts between teams
+- Implement data quality tests (dbt tests, Great Expectations)
+- Track data lineage for impact analysis
+
+### Security and compliance  
+- PII handling through masking or tokenization
+- Role-based access control
+- Encryption at rest and in transit
+
+### Metadata management
+- Document data owners and SLAs
+- Track freshness and cost metrics
+- Maintain business glossary
+
+## Performance and cost optimization
+
+### Query optimization
+- Use denormalized read models for BI workloads
+- Pre-aggregate frequently queried data
+- Always include partition filters in queries
+- Avoid SELECT * in production
+
+### Resource management
+- Implement result caching where possible
+- Use time travel features sparingly
+- Schedule automatic maintenance (vacuum, optimize)
+- Set up cost monitoring and alerts
+
+## ML-specific considerations
+
+### Training data integrity
+- Ensure point-in-time correct extracts to avoid data leakage
+- Snapshot raw and staging tables for reproducibility
+- Maintain feature documentation and lineage
+
+### Training-serving alignment
+- Keep training and serving schemas aligned
+- Monitor for training-serving skew
+- Consider feeding a feature store from the warehouse
+
+## Technology stack options
+
+### Cloud data warehouses
+- BigQuery (Google Cloud)
+- Snowflake (multi-cloud)
+- Redshift (AWS)
+
+### Lakehouse architecture
+- Object storage (S3, GCS, ADLS)
+- Table formats (Delta Lake, Iceberg, Hudi)
+- Query engines (Trino, Presto, Athena)
+
+### Supporting tools
+- **Orchestration**: Airflow, Dagster
+- **Transformation**: dbt, Spark
+- **Ingestion**: Fivetran, Airbyte, Kafka
+- **BI**: Looker, Tableau, Metabase, Superset
+
+## Implementation checklist
+
+Before going to production:
+
+- [ ] Define data sources, SLAs, and contracts
+- [ ] Build staging to dimensional model pipeline
+- [ ] Choose partitioning and clustering strategy
+- [ ] Implement data quality tests and lineage tracking
+- [ ] Set up PII policies and access controls
+- [ ] Configure cost guardrails and monitoring
+- [ ] Create backfill and recovery procedures
+
+## Naming conventions
+
+Use consistent layer prefixes:
+- `raw_*` for source data
+- `stg_*` for staging/cleaning
+- `dim_*` for dimension tables  
+- `fct_*` for fact tables
+
+## Example query pattern
+
+```sql
+-- Partition-pruned revenue analysis
+SELECT 
+    d.customer_id, 
+    SUM(f.net_revenue) AS total_revenue
+FROM fct_orders f
+JOIN dim_customers d ON d.customer_key = f.customer_key
+WHERE f.event_date BETWEEN DATE '2025-08-01' AND DATE '2025-08-31'
+  AND d.country = 'Turkey'
+GROUP BY d.customer_id
+ORDER BY total_revenue DESC;
+```
+
+## Key takeaways
+
+Data warehouses excel at structured analytics and reporting with strong governance. They provide a reliable foundation for business intelligence and can support ML workflows when designed with proper time-based partitioning and data quality controls. Choose your architecture based on scale, budget, and team expertise.
